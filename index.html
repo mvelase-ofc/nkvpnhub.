@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nk Tech — VPN Access</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<!-- SUPABASE SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#07090f;--bg2:#0d1117;--bg3:#111822;
+  --border:#1a2235;
+  --green:#22c55e;--green2:#16a34a;--green-glow:rgba(34,197,94,.12);
+  --blue:#3b82f6;--blue2:#2563eb;--blue-glow:rgba(59,130,246,.12);
+  --white:#eef2f7;--muted:#4a5568;--muted2:#2d3748;
+  --mono:'DM Mono',monospace;--head:'Syne',sans-serif;--body:'DM Sans',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--body);background:var(--bg);color:var(--white);overflow-x:hidden}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--blue);border-radius:2px}
+
+#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.page{position:relative;z-index:1}
+
+/* ── NAV ── */
+.nav{
+  position:sticky;top:0;z-index:99;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 22px;height:54px;
+  background:rgba(7,9,15,.9);
+  backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--border);
+}
+.nav-brand{
+  font-family:var(--head);font-size:1.15rem;font-weight:800;
+  letter-spacing:.05em;color:var(--white);
+  display:flex;align-items:center;gap:9px;
+}
+.live-pip{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 10px var(--green);
+  animation:pip 1.8s ease-in-out infinite;
+}
+@keyframes pip{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.65)}}
+.nav-right{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.08em;
+}
+.nav-live{display:flex;align-items:center;gap:5px;color:var(--green)}
+#nav-clock{color:var(--blue)}
+#nav-user-info{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.6rem;color:var(--green);letter-spacing:.08em;}
+#nav-user-email{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#btn-logout{
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);
+  color:#ef4444;font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:4px 10px;border-radius:4px;cursor:pointer;transition:all .2s;
+}
+#btn-logout:hover{background:#ef4444;color:#fff;}
+
+/* ════════════════════════════
+   AUTH OVERLAY
+════════════════════════════ */
+#auth-overlay{
+  position:fixed;inset:0;z-index:200;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(7,9,15,.97);backdrop-filter:blur(18px);
+  padding:20px;
+}
+#auth-overlay.hidden{display:none}
+
+.auth-box{
+  width:100%;max-width:400px;
+  background:rgba(13,17,23,.95);
+  border:1px solid var(--border);border-radius:16px;
+  overflow:hidden;position:relative;
+}
+.auth-box::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--blue),var(--green));
+}
+.auth-top{padding:28px 28px 0;}
+.auth-logo{font-family:var(--head);font-size:1.5rem;font-weight:800;letter-spacing:.06em;display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.auth-logo .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pip 1.6s infinite;}
+.auth-sub{font-family:var(--mono);font-size:.63rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:24px;}
+
+.auth-tabs{display:flex;border-bottom:1px solid var(--border);margin:0 -28px;padding:0 28px;}
+.auth-tab{
+  flex:1;text-align:center;padding:11px 0;
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;
+  transition:color .2s,border-color .2s;
+}
+.auth-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+.auth-form{padding:22px 28px 28px;display:flex;flex-direction:column;gap:14px;}
+.auth-field{display:flex;flex-direction:column;gap:6px;}
+.auth-label{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.auth-input{
+  background:rgba(7,9,15,.8);border:1px solid var(--border);border-radius:8px;
+  padding:12px 14px;color:var(--white);font-family:var(--mono);font-size:.82rem;
+  outline:none;transition:border-color .2s,box-shadow .2s;
+}
+.auth-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+.auth-input::placeholder{color:var(--muted2);}
+.auth-btn{
+  margin-top:4px;padding:14px;border:none;border-radius:8px;
+  background:linear-gradient(135deg,var(--blue2),var(--blue));
+  color:#fff;font-family:var(--mono);font-size:.75rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+  cursor:pointer;transition:all .25s;
+}
+.auth-btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(59,130,246,.35);}
+.auth-btn:active{transform:translateY(0);}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.auth-msg{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.04em;
+  padding:10px 14px;border-radius:7px;text-align:center;display:none;
+}
+.auth-msg.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.22);color:#ef4444;display:block;}
+.auth-msg.ok{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.22);color:var(--green);display:block;}
+.auth-footer-note{text-align:center;font-family:var(--mono);font-size:.6rem;letter-spacing:.04em;color:var(--muted2);padding:0 0 4px;}
+.auth-footer-note a{color:var(--blue);cursor:pointer;text-decoration:none;}
+.auth-footer-note a:hover{text-decoration:underline;}
+.forgot-link{text-align:right;font-family:var(--mono);font-size:.6rem;letter-spacing:.05em;color:rgba(59,130,246,.55);cursor:pointer;transition:color .2s;}
+.forgot-link:hover{color:var(--blue);}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── HERO ── */
+.hero{padding:48px 22px 32px;border-bottom:1px solid var(--border);position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:-80px;right:-80px;width:300px;height:300px;background:radial-gradient(circle,var(--blue-glow) 0%,transparent 70%);pointer-events:none;}
+.hero-tag{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.63rem;letter-spacing:.14em;color:var(--green);text-transform:uppercase;border:1px solid rgba(34,197,94,.22);padding:5px 11px;border-radius:3px;background:rgba(34,197,94,.06);margin-bottom:20px;}
+.hero-tag .dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pip 1.4s infinite;box-shadow:0 0 5px var(--green)}
+.hero-h1{font-family:var(--head);font-weight:800;font-size:clamp(2.1rem,6vw,3.2rem);line-height:1.04;letter-spacing:.02em;color:var(--white);margin-bottom:12px;}
+.hero-h1 .g{color:var(--green)}.hero-h1 .b{color:var(--blue)}
+.hero-desc{font-size:.88rem;color:var(--muted);max-width:460px;line-height:1.72;font-weight:300;margin-bottom:26px}
+.hero-stats{display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;max-width:440px;}
+.hs{flex:1;padding:14px 12px;border-right:1px solid var(--border);background:rgba(13,17,23,.7);position:relative;overflow:hidden;}
+.hs:last-child{border-right:none}
+.hs::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--blue),transparent);opacity:0;transition:opacity .3s;}
+.hs:hover::after{opacity:1}
+.hs-num{font-family:var(--head);font-size:1.4rem;font-weight:800;color:var(--blue);line-height:1}
+.hs-lbl{font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:4px}
+
+/* ── SECTION LABEL ── */
+.sec-hdr{padding:26px 22px 12px}
+.sec-label{font-family:var(--mono);font-size:.63rem;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:10px;}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── STATUS PANEL ── */
+.status-panel{margin:0 22px;background:rgba(13,17,23,.8);border:1px solid var(--border);border-radius:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));overflow:hidden;backdrop-filter:blur(10px);}
+.sp-item{padding:14px 16px;border-right:1px solid var(--border);position:relative;transition:background .25s;}
+.sp-item:last-child{border-right:none}
+.sp-item:hover{background:rgba(59,130,246,.05)}
+.sp-item::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--blue),transparent);opacity:0;transition:opacity .3s;}
+.sp-item:hover::after{opacity:1}
+.sp-key{font-family:var(--mono);font-size:.57rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.sp-val{font-family:var(--head);font-size:1rem;font-weight:700;color:var(--white);line-height:1}
+.sp-val.green{color:var(--green)}.sp-val.blue{color:var(--blue)}
+
+/* ── VPN CARDS ── */
+.vpn-list{padding:0 22px 10px;display:flex;flex-direction:column;gap:10px}
+.vpn-card{background:rgba(11,14,20,.85);border:1px solid var(--border);border-radius:12px;padding:20px 20px 18px;position:relative;overflow:hidden;transition:border-color .3s,transform .25s,box-shadow .3s;backdrop-filter:blur(8px);}
+.vpn-card:hover{border-color:rgba(59,130,246,.38);transform:translateY(-2px);box-shadow:0 8px 30px rgba(59,130,246,.1),0 0 0 1px rgba(59,130,246,.08);}
+.vpn-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--blue),var(--green),transparent);opacity:0;transition:opacity .3s;}
+.vpn-card:hover::before{opacity:1}
+.vc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.vc-left{display:flex;align-items:center;gap:10px}
+.vc-live-dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green),0 0 18px rgba(34,197,94,.35);animation:pip 1.6s infinite;flex-shrink:0;}
+.vc-name{font-family:var(--head);font-size:1.2rem;font-weight:800;letter-spacing:.03em;color:var(--white);}
+.vc-badge{font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;padding:3px 9px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.22);color:var(--blue);border-radius:3px;}
+.vc-bars{display:flex;align-items:flex-end;gap:3px;height:22px;}
+.vc-bar{width:5px;border-radius:2px;background:var(--border);}
+.vc-bar.on{background:var(--green);box-shadow:0 0 5px rgba(34,197,94,.55);}
+.vc-bar.on.bl{background:var(--blue);box-shadow:0 0 5px rgba(59,130,246,.55);}
+.vc-bar:nth-child(1){height:7px}.vc-bar:nth-child(2){height:11px}.vc-bar:nth-child(3){height:15px}.vc-bar:nth-child(4){height:18px}.vc-bar:nth-child(5){height:22px}
+.vc-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;margin-left:20px;}
+.vc-proto{font-family:var(--mono);font-size:.63rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;}
+.vc-enc{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;color:rgba(59,130,246,.5);display:flex;align-items:center;gap:4px;}
+.vc-dl{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.22);border-radius:8px;color:var(--green);text-decoration:none;font-family:var(--mono);font-size:.75rem;font-weight:500;letter-spacing:.12em;text-transform:uppercase;transition:all .25s;position:relative;overflow:hidden;cursor:pointer;}
+.vc-dl::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(34,197,94,.07),transparent);transition:left .45s;}
+.vc-dl:hover{background:var(--green);color:var(--bg);box-shadow:0 4px 20px rgba(34,197,94,.3);}
+.vc-dl:hover::before{left:100%}
+.vc-dl i{font-size:.8rem}
+
+/* ── UNAVAILABLE MODAL ── */
+.modal-overlay{position:fixed;inset:0;z-index:999;background:rgba(7,9,15,.82);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:22px;opacity:0;pointer-events:none;transition:opacity .3s;}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-box{background:rgba(11,14,20,.97);border:1px solid var(--border);border-radius:14px;padding:30px 24px 24px;max-width:340px;width:100%;position:relative;overflow:hidden;transform:translateY(18px) scale(.97);transition:transform .35s cubic-bezier(.4,0,.2,1);box-shadow:0 20px 60px rgba(0,0,0,.6);text-align:center;}
+.modal-overlay.open .modal-box{transform:translateY(0) scale(1)}
+.modal-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--green),transparent);}
+.modal-icon{font-size:2.5rem;margin-bottom:14px;display:block;animation:wiggle .6s ease forwards;}
+@keyframes wiggle{0%{transform:rotate(-8deg) scale(.9)}40%{transform:rotate(10deg) scale(1.12)}70%{transform:rotate(-5deg) scale(1.05)}100%{transform:rotate(0deg) scale(1)}}
+.modal-title{font-family:var(--head);font-size:1.1rem;font-weight:800;color:var(--white);margin-bottom:8px;}
+.modal-desc{font-size:.83rem;color:var(--muted);line-height:1.7;margin-bottom:22px;}
+.modal-bar{display:flex;align-items:center;gap:10px;background:rgba(13,17,23,.9);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;position:relative;overflow:hidden;}
+.modal-bar::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--blue),transparent);}
+.modal-bar-dot{width:8px;height:8px;border-radius:50%;background:var(--muted2);flex-shrink:0;}
+.modal-bar-text{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;}
+.modal-close{width:100%;padding:13px;background:rgba(59,130,246,.09);border:1px solid rgba(59,130,246,.22);border-radius:8px;color:var(--blue);font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .25s;}
+.modal-close:hover{background:var(--blue);color:var(--bg);box-shadow:0 4px 18px rgba(59,130,246,.3)}
+
+/* ── OWNER CARD ── */
+.owner-section{padding:0 22px 22px}
+.owner-card{background:rgba(11,14,20,.85);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;gap:18px;align-items:flex-start;position:relative;overflow:hidden;backdrop-filter:blur(8px);}
+.owner-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--blue),var(--green),transparent);border-radius:3px 0 0 3px;}
+.owner-avatar{width:52px;height:52px;flex-shrink:0;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:var(--blue);}
+.owner-name{font-family:var(--head);font-size:1.1rem;font-weight:800;color:var(--white);margin-bottom:12px}
+.owner-rows{display:flex;flex-direction:column;gap:7px}
+.owner-row{display:flex;gap:10px;font-size:.83rem;align-items:flex-start}
+.or-key{font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;min-width:64px;padding-top:2px;}
+.or-val{color:var(--white);font-weight:500;display:flex;gap:5px;flex-wrap:wrap}
+.skill-tag{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;padding:3px 9px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.18);color:var(--blue);border-radius:3px;}
+
+/* ── QUOTE ── */
+.quote-section{padding:0 22px 22px}
+.quote-box{background:rgba(11,14,20,.85);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:0 10px 10px 0;padding:18px 20px;backdrop-filter:blur(8px);}
+#quote-text{font-size:.87rem;font-style:italic;color:var(--muted);line-height:1.75;transition:opacity .4s;}
+#quote-text::before{content:'\201C';color:var(--blue);font-size:1.1rem;margin-right:2px}
+#quote-text::after{content:'\201D';color:var(--blue);font-size:1.1rem;margin-left:2px}
+
+/* ── CONNECT ── */
+.connect-section{padding:0 22px 22px;display:flex;flex-direction:column;gap:9px}
+.connect-btn{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;background:rgba(11,14,20,.85);
+  border:1px solid var(--border);border-radius:10px;
+  text-decoration:none;color:var(--white);
+  font-size:.78rem;font-family:var(--mono);font-weight:400;
+  letter-spacing:.18em;text-transform:uppercase;
+  transition:all .25s;backdrop-filter:blur(8px);
+  position:relative;overflow:hidden;
+}
+.connect-btn::before{content:'';position:absolute;left:0;top:0;bottom:0;width:0;transition:width .3s;z-index:0}
+.connect-btn:hover::before{width:100%}
+.cb-label{display:flex;align-items:center;gap:11px;position:relative;z-index:1}
+.cb-label i{font-size:1.05rem}
+.cb-arrow{font-size:.75rem;color:var(--muted);transition:transform .25s;position:relative;z-index:1}
+.connect-btn:hover .cb-arrow{transform:translateX(4px)}
+.cb-ch{border-color:rgba(34,197,94,.22);background:rgba(34,197,94,.04)}
+.cb-ch::before{background:var(--green2)}.cb-ch:hover{color:#fff;border-color:var(--green)}
+.cb-ch .cb-label i{color:var(--green)}.cb-ch:hover .cb-label i,.cb-ch:hover .cb-arrow{color:#fff}
+.cb-ch .cb-arrow{color:var(--green)}
+.cb-wa::before{background:#1a7a45}.cb-wa:hover{color:#fff;border-color:#25D366}
+.cb-wa .cb-label i{color:#25D366}.cb-wa:hover .cb-label i{color:#fff}
+.cb-tg::before{background:#1471a0}.cb-tg:hover{color:#fff;border-color:#229ED9}
+.cb-tg .cb-label i{color:#229ED9}.cb-tg:hover .cb-label i{color:#fff}
+
+/* ── FOOTER ── */
+.footer{padding:16px 22px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(7,9,15,.9);}
+.footer-brand{font-family:var(--head);font-size:.88rem;font-weight:800;letter-spacing:.05em;color:var(--muted)}
+.footer-copy{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;color:var(--muted2)}
+.footer-enc{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;color:rgba(59,130,246,.4)}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--blue);padding:13px 17px;max-width:250px;font-family:var(--mono);font-size:.7rem;color:var(--white);z-index:998;border-radius:8px;transform:translateY(90px);opacity:0;transition:transform .38s cubic-bezier(.4,0,.2,1),opacity .38s;letter-spacing:.03em;line-height:1.55;backdrop-filter:blur(12px);}
+#toast.on{transform:translateY(0);opacity:1}
+#toast .th{color:var(--blue);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+
+/* ── FADE IN ── */
+.fade{opacity:0;transform:translateY(14px);transition:opacity .55s ease,transform .55s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<!-- ════════════════════════════
+     AUTH OVERLAY
+════════════════════════════ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-top">
+      <div class="auth-logo"><div class="dot"></div>NK TECH</div>
+      <div class="auth-sub">Secure VPN Access · Zimbabwe</div>
+      <div class="auth-tabs">
+        <div class="auth-tab active" id="tab-login" onclick="switchTab('login')">Login</div>
+        <div class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</div>
+        <div class="auth-tab" id="tab-reset" style="display:none" onclick="switchTab('reset')">Reset</div>
+      </div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="auth-form" id="form-login">
+      <div class="auth-field">
+        <label class="auth-label">Email</label>
+        <input class="auth-input" type="email" id="login-email" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Password</label>
+        <input class="auth-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+        <span class="forgot-link" onclick="switchTab('reset')">Forgot password?</span>
+      </div>
+      <div class="auth-msg" id="login-msg"></div>
+      <button class="auth-btn" id="btn-login" onclick="doLogin()">Login</button>
+      <div class="auth-footer-note">No account? <a onclick="switchTab('signup')">Sign up free</a></div>
+    </div>
+
+    <!-- SIGNUP -->
+    <div class="auth-form" id="form-signup" style="display:none">
+      <div class="auth-field">
+        <label class="auth-label">Email</label>
+        <input class="auth-input" type="email" id="signup-email" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Password</label>
+        <input class="auth-input" type="password" id="signup-pass" placeholder="Min. 6 characters" autocomplete="new-password">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Confirm Password</label>
+        <input class="auth-input" type="password" id="signup-pass2" placeholder="Repeat password" autocomplete="new-password">
+      </div>
+      <div class="auth-msg" id="signup-msg"></div>
+      <button class="auth-btn" id="btn-signup" onclick="doSignup()">Create Account</button>
+      <div class="auth-footer-note">Have an account? <a onclick="switchTab('login')">Login</a></div>
+    </div>
+
+    <!-- RESET -->
+    <div class="auth-form" id="form-reset" style="display:none">
+      <div class="auth-field">
+        <label class="auth-label">Your Email</label>
+        <input class="auth-input" type="email" id="reset-email" placeholder="your@email.com">
+      </div>
+      <div class="auth-msg" id="reset-msg"></div>
+      <button class="auth-btn" id="btn-reset" onclick="doReset()">Send Reset Link</button>
+      <div class="auth-footer-note"><a onclick="switchTab('login')">← Back to Login</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     MAIN PAGE
+════════════════════════════ -->
+<div class="page" id="main-page" style="display:none">
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand"><div class="live-pip"></div>NK TECH</div>
+  <div class="nav-right">
+    <span class="nav-live"><i class="fas fa-circle" style="font-size:.42rem"></i>LIVE</span>
+    <span>ZWE</span>
+    <span id="nav-clock">--:--:--</span>
+    <span id="nav-user-info" style="display:none">
+      <i class="fas fa-circle-user"></i>
+      <span id="nav-user-email"></span>
+      <button id="btn-logout" onclick="doLogout()">Logout</button>
+    </span>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero fade">
+  <div class="hero-tag"><div class="dot"></div>ALL SERVERS OPERATIONAL</div>
+  <h1 class="hero-h1">SECURE <span class="b">VPN</span><br>ACCESS <span class="g">ZWE</span></h1>
+  <p class="hero-desc">Professional VPN configurations for Zimbabwe networks. Free, fast and always live — maintained by Nkosi.</p>
+  <div class="hero-stats">
+    <div class="hs"><div class="hs-num">9</div><div class="hs-lbl">VPN Apps</div></div>
+    <div class="hs"><div class="hs-num">7ms</div><div class="hs-lbl">Latency</div></div>
+    <div class="hs"><div class="hs-num">24/7</div><div class="hs-lbl">Uptime</div></div>
+    <div class="hs"><div class="hs-num" id="visit-num">—</div><div class="hs-lbl">Visits</div></div>
+  </div>
+</div>
+
+<!-- STATUS PANEL -->
+<div class="sec-hdr fade"><div class="sec-label">Live Status</div></div>
+<div class="status-panel fade">
+  <div class="sp-item"><div class="sp-key">Uptime</div><div class="sp-val green" id="uptime">0s</div></div>
+  <div class="sp-item"><div class="sp-key">Latency</div><div class="sp-val blue">7ms</div></div>
+  <div class="sp-item"><div class="sp-key">Battery</div><div class="sp-val green" id="battery">—</div></div>
+  <div class="sp-item"><div class="sp-key">Encrypt</div><div class="sp-val">AES-256</div></div>
+  <div class="sp-item"><div class="sp-key">Status</div><div class="sp-val green">LIVE ●</div></div>
+</div>
+
+<!-- VPN CARDS -->
+<div class="sec-hdr fade" style="padding-bottom:4px"><div class="sec-label">VPN Configurations</div></div>
+<div class="vpn-list fade" id="vpnList"></div>
+
+<!-- OWNER -->
+<div class="sec-hdr fade"><div class="sec-label">Owner Info</div></div>
+<div class="owner-section fade">
+  <div class="owner-card">
+    <div class="owner-avatar"><i class="fas fa-user-shield"></i></div>
+    <div style="flex:1">
+      <div class="owner-name">NK TECH</div>
+      <div class="owner-rows">
+        <div class="owner-row"><span class="or-key">Age</span><span class="or-val">18</span></div>
+        <div class="owner-row"><span class="or-key">Country</span><span class="or-val">Zimbabwe 🇿🇼</span></div>
+        <div class="owner-row"><span class="or-key">City</span><span class="or-val">Bulawayo</span></div>
+        <div class="owner-row">
+          <span class="or-key">Skills</span>
+          <span class="or-val">
+            <span class="skill-tag">HTML</span>
+            <span class="skill-tag">JAVASCRIPT</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QUOTE -->
+<div class="sec-hdr fade"><div class="sec-label">Quote</div></div>
+<div class="quote-section fade">
+  <div class="quote-box">
+    <div id="quote-text">Technology is best when it brings freedom — fast, secure, and reliable access.</div>
+  </div>
+</div>
+
+<!-- CONNECT -->
+<div class="sec-hdr fade"><div class="sec-label">Connect</div></div>
+<div class="connect-section fade">
+  <a href="https://whatsapp.com/channel/0029Vb75DVQISTkHLA28ak1n" class="connect-btn cb-ch">
+    <span class="cb-label"><i class="fab fa-whatsapp"></i>Official Channel</span>
+    <i class="fas fa-arrow-right cb-arrow"></i>
+  </a>
+  <a href="https://chat.whatsapp.com/Dx8QsSM81ccKxJrcaNwnFX" class="connect-btn cb-ch">
+    <span class="cb-label"><i class="fab fa-whatsapp"></i>Official Group</span>
+    <i class="fas fa-arrow-right cb-arrow"></i>
+  </a>
+  <a href="https://wa.me/263771912275" class="connect-btn cb-wa">
+    <span class="cb-label"><i class="fab fa-whatsapp"></i>wa.me</span>
+    <i class="fas fa-arrow-right cb-arrow"></i>
+  </a>
+  <a href="https://t.me/khulekanidube" class="connect-btn cb-tg">
+    <span class="cb-label"><i class="fab fa-telegram"></i>t.me</span>
+    <i class="fas fa-arrow-right cb-arrow"></i>
+  </a>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-brand">NK TECH</div>
+  <div class="footer-copy">© 2026–2999</div>
+  <div class="footer-enc"><i class="fas fa-shield-halved"></i>AES-256</div>
+</div>
+
+</div><!-- end main-page -->
+
+<!-- TOAST -->
+<div id="toast"><div class="th" id="t-head">NOTICE</div><span id="t-body"></span></div>
+
+<!-- UNAVAILABLE MODAL -->
+<div class="modal-overlay" id="unavailModal">
+  <div class="modal-box">
+    <span class="modal-icon">😉</span>
+    <div class="modal-title">File Not Available</div>
+    <div class="modal-desc">This config file is currently unavailable.<br>Check back soon or contact Nkosi directly.</div>
+    <div class="modal-bar"><div class="modal-bar-dot"></div><div class="modal-bar-text">Config · Offline</div></div>
+    <div class="modal-bar"><div class="modal-bar-dot"></div><div class="modal-bar-text">AES-256 · Pending</div></div>
+    <button class="modal-close" id="modalCloseBtn">CLOSE</button>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════
+   SUPABASE CONFIG
+   Replace these two values with yours from supabase.com
+════════════════════════════ */
+const SUPABASE_URL  = 'https://uniwdyctgsnvndwsmlay.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVuaXdkeWN0Z3Nudm5kd3NtbGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4Njg1NTIsImV4cCI6MjA5NDQ0NDU1Mn0.N0kNsXIEpQq6TLQCsmzzvpPEO3nHO9EvpIJnPSpNEUE';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+/* ════════════════════════════
+   AUTH HELPERS
+════════════════════════════ */
+function switchTab(tab){
+  ['login','signup','reset'].forEach(t=>{
+    document.getElementById('form-'+t).style.display = t===tab?'flex':'none';
+    const el=document.getElementById('tab-'+t);
+    if(el) el.classList.toggle('active', t===tab);
+  });
+  document.getElementById('tab-reset').style.display = tab==='reset'?'flex':'none';
+}
+
+function setBtn(id, loading, text){
+  const b=document.getElementById(id);
+  b.disabled=loading;
+  b.innerHTML=loading?`<span class="spin"></span>Please wait…`:text;
+}
+
+function showMsg(id, text, type){
+  const el=document.getElementById(id);
+  el.textContent=text;
+  el.className='auth-msg '+(type==='ok'?'ok':'err');
+}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  if(!email||!pass){showMsg('login-msg','Please fill in all fields.','err');return;}
+  setBtn('btn-login',true,'Login');
+  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  setBtn('btn-login',false,'Login');
+  if(error){showMsg('login-msg',error.message,'err');return;}
+}
+
+async function doSignup(){
+  const email=document.getElementById('signup-email').value.trim();
+  const pass=document.getElementById('signup-pass').value;
+  const pass2=document.getElementById('signup-pass2').value;
+  if(!email||!pass||!pass2){showMsg('signup-msg','Please fill in all fields.','err');return;}
+  if(pass!==pass2){showMsg('signup-msg','Passwords do not match.','err');return;}
+  if(pass.length<6){showMsg('signup-msg','Password must be at least 6 characters.','err');return;}
+  setBtn('btn-signup',true,'Create Account');
+  const{error}=await sb.auth.signUp({email,password:pass});
+  setBtn('btn-signup',false,'Create Account');
+  if(error){showMsg('signup-msg',error.message,'err');return;}
+  showMsg('signup-msg','✅ Account created! Check your email to confirm, then login.','ok');
+}
+
+async function doReset(){
+  const email=document.getElementById('reset-email').value.trim();
+  if(!email){showMsg('reset-msg','Enter your email.','err');return;}
+  setBtn('btn-reset',true,'Send Reset Link');
+  const{error}=await sb.auth.resetPasswordForEmail(email,{
+    redirectTo:window.location.origin+window.location.pathname
+  });
+  setBtn('btn-reset',false,'Send Reset Link');
+  if(error){showMsg('reset-msg',error.message,'err');return;}
+  showMsg('reset-msg','✅ Reset link sent! Check your inbox.','ok');
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+}
+
+/* ════════════════════════════
+   SESSION LISTENER
+════════════════════════════ */
+sb.auth.onAuthStateChange((event, session)=>{
+  if(session&&session.user){
+    document.getElementById('auth-overlay').classList.add('hidden');
+    document.getElementById('main-page').style.display='block';
+    document.getElementById('nav-user-email').textContent=session.user.email;
+    document.getElementById('nav-user-info').style.display='flex';
+    startPage();
+  } else {
+    document.getElementById('auth-overlay').classList.remove('hidden');
+    document.getElementById('main-page').style.display='none';
+  }
+});
+
+(async()=>{
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session) document.getElementById('auth-overlay').classList.remove('hidden');
+})();
+
+/* ════════════════════════════
+   PAGE SCRIPTS (run after login)
+════════════════════════════ */
+let pageStarted=false;
+function startPage(){
+  if(pageStarted)return;
+  pageStarted=true;
+
+  /* ANIMATED BACKGROUND */
+  (function(){
+    const c=document.getElementById('bgCanvas');
+    const ctx=c.getContext('2d');
+    function resize(){c.width=window.innerWidth;c.height=window.innerHeight}
+    resize();window.addEventListener('resize',resize);
+    const nodes=[];
+    for(let i=0;i<55;i++){
+      nodes.push({x:Math.random()*c.width,y:Math.random()*c.height,vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35,r:Math.random()*2+1,color:Math.random()>.5?'rgba(59,130,246,':'rgba(34,197,94,'});
+    }
+    function draw(){
+      ctx.clearRect(0,0,c.width,c.height);
+      for(let i=0;i<nodes.length;i++){
+        for(let j=i+1;j<nodes.length;j++){
+          const a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,dist=Math.sqrt(dx*dx+dy*dy);
+          if(dist<130){ctx.beginPath();ctx.strokeStyle=`rgba(59,130,246,${(1-dist/130)*.18})`;ctx.lineWidth=.6;ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+        }
+      }
+      nodes.forEach(n=>{ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);ctx.fillStyle=n.color+'0.45)';ctx.fill();n.x+=n.vx;n.y+=n.vy;if(n.x<0||n.x>c.width)n.vx*=-1;if(n.y<0||n.y>c.height)n.vy*=-1;});
+      requestAnimationFrame(draw);
+    }
+    draw();
+  })();
+
+  /* CLOCK */
+  const clk=document.getElementById('nav-clock');
+  function tick(){const n=new Date(),p=v=>String(v).padStart(2,'0');clk.textContent=p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds())}
+  tick();setInterval(tick,1000);
+
+  /* UPTIME */
+  const t0=Date.now();
+  function upd(){let s=Math.floor((Date.now()-t0)/1000),m=Math.floor(s/60),h=Math.floor(m/60);s%=60;m%=60;document.getElementById('uptime').textContent=(h?h+'h ':'')+( m?m+'m ':'')+s+'s';}
+  upd();setInterval(upd,1000);
+
+  /* BATTERY */
+  if(navigator.getBattery){navigator.getBattery().then(b=>{const u=()=>{document.getElementById('battery').textContent=Math.round(b.level*100)+'%'};u();b.addEventListener('levelchange',u);});}
+
+  /* VISITS */
+  let v=parseInt(localStorage.getItem('nkt_v3')||'0')+1;
+  localStorage.setItem('nkt_v3',v);
+  document.getElementById('visit-num').textContent=v.toLocaleString();
+
+  /* MODAL */
+  const modal=document.getElementById('unavailModal');
+  document.getElementById('modalCloseBtn').addEventListener('click',()=>modal.classList.remove('open'));
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+  window.showUnavailModal=()=>modal.classList.add('open');
+
+  /* VPN CARDS */
+  const CATBOX_LINK='https://files.catbox.moe/nbr7mi.zip';
+  const vpns=[
+    {name:'HA Tunnel',       proto:'HTTP Protocol',  bars:5,blueBar:5,available:false},
+    {name:'Stark VPN',       proto:'SSL Reloaded',   bars:4,blueBar:4,available:false},
+    {name:'Link Layer',      proto:'L2TP Tunnel',    bars:5,blueBar:5,available:false},
+    {name:'NPV Tunnel',      proto:'VPN Core',       bars:4,blueBar:3,available:false},
+    {name:'HTTP Injector',   proto:'HTTP Payload',   bars:3,blueBar:2,available:false},
+    {name:'HTTP Custom',     proto:'Custom Headers', bars:4,blueBar:4,available:true},
+    {name:'Tik Tunnel',      proto:'UDP Stream',     bars:5,blueBar:5,available:false},
+    {name:'Socks IP Tunnel', proto:'SOCKS5 Proxy',   bars:3,blueBar:2,available:false},
+    {name:'V2Box',           proto:'V2Ray Core',     bars:5,blueBar:5,available:false},
+  ];
+  const list=document.getElementById('vpnList');
+  vpns.forEach((v,i)=>{
+    let barsHTML='';
+    for(let b=1;b<=5;b++){let cls='vc-bar';if(b<=v.bars){cls+=' on';if(b===v.blueBar)cls+=' bl';}barsHTML+=`<div class="${cls}"></div>`;}
+    const d=document.createElement('div');
+    d.className='vpn-card fade';
+    d.style.transitionDelay=(i*.05)+'s';
+    const btnHTML=v.available
+      ?`<a href="${CATBOX_LINK}" download class="vc-dl"><i class="fas fa-download"></i> DOWNLOAD CONFIG</a>`
+      :`<div class="vc-dl" onclick="showUnavailModal()"><i class="fas fa-download"></i> DOWNLOAD CONFIG</div>`;
+    d.innerHTML=`
+      <div class="vc-head">
+        <div class="vc-left"><div class="vc-live-dot"></div><div class="vc-name">${v.name}</div></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="vc-bars">${barsHTML}</div>
+          <span class="vc-badge">${v.proto.split(' ')[0]}</span>
+        </div>
+      </div>
+      <div class="vc-meta">
+        <span class="vc-proto">${v.proto}</span>
+        <span class="vc-enc"><i class="fas fa-lock" style="font-size:.55rem"></i>AES-256</span>
+      </div>
+      ${btnHTML}`;
+    list.appendChild(d);
+  });
+
+  /* QUOTES */
+  const quotes=["Technology is best when it brings freedom — fast, secure, and reliable access.","VPNs should be fast, safe, and professionally maintained.","The internet is for everyone — never let a wall stop you.","Security is not a product, it's a process.","Nk Tech — keeping Zimbabwe connected, always."];
+  let qi=0;
+  const qel=document.getElementById('quote-text');
+  setInterval(()=>{qel.style.opacity='0';setTimeout(()=>{qi=(qi+1)%quotes.length;qel.textContent=quotes[qi];qel.style.opacity='1'},420);},6500);
+
+  /* TOASTS */
+  const toasts=[{h:'SERVER STATUS',b:'All 9 VPN nodes online and active.'},{h:'LATENCY',b:'Ping: 7ms — optimal connection.'},{h:'ENCRYPTION',b:'AES-256 active on all configs.'},{h:'UPDATE',b:'Latest VPN configs available now.'}];
+  let ti=0;
+  function showToast(){const t=toasts[ti],el=document.getElementById('toast');document.getElementById('t-head').textContent=t.h;document.getElementById('t-body').textContent=t.b;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),4200);ti=(ti+1)%toasts.length;}
+  setTimeout(showToast,2200);setInterval(showToast,10500);
+
+  /* FADE IN */
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');io.unobserve(e.target)}})},{threshold:.06});
+  document.querySelectorAll('.fade').forEach(el=>io.observe(el));
+}
+</script>
+</body>
+</html>
