@@ -609,16 +609,16 @@ function startPage(){
   window.showUnavailModal=()=>modal.classList.add('open');
 
   /* VPN CARDS */
-  const CATBOX_LINK='https://files.catbox.moe/nbr7mi.zip';
+  const CATBOX_LINK='https://files.catbox.moe/kphjti.zip';
   const vpns=[
     {name:'HA Tunnel',       proto:'HTTP Protocol',  bars:5,blueBar:5,available:false},
     {name:'Stark VPN',       proto:'SSL Reloaded',   bars:4,blueBar:4,available:false},
     {name:'Link Layer',      proto:'L2TP Tunnel',    bars:5,blueBar:5,available:false},
-    {name:'NPV Tunnel',      proto:'VPN Core',       bars:4,blueBar:3,available:false},
-    {name:'HTTP Injector',   proto:'HTTP Payload',   bars:3,blueBar:2,available:false},
-    {name:'HTTP Custom',     proto:'Custom Headers', bars:4,blueBar:4,available:true},
+    {name:'NPV Tunnel',      proto:'V2Ray Core',       bars:4,blueBar:3,available:false},
+    {name:'HTTP Injector',   proto:'Slow Dns',   bars:3,blueBar:2,available:false},
+    {name:'HTTP Custom',     proto:'Slow Dns', bars:4,blueBar:4,available:true},
     {name:'Tik Tunnel',      proto:'UDP Stream',     bars:5,blueBar:5,available:false},
-    {name:'Socks IP Tunnel', proto:'SOCKS5 Proxy',   bars:3,blueBar:2,available:false},
+    {name:'Socks IP Tunnel', proto:'V2Ray Core',   bars:3,blueBar:2,available:false},
     {name:'V2Box',           proto:'V2Ray Core',     bars:5,blueBar:5,available:false},
   ];
   const list=document.getElementById('vpnList');
