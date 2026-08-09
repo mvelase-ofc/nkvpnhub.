@@ -264,6 +264,81 @@ body{font-family:var(--body);background:var(--bg);color:var(--white);overflow-x:
 /* ── FADE IN ── */
 .fade{opacity:0;transform:translateY(14px);transition:opacity .55s ease,transform .55s ease}
 .fade.vis{opacity:1;transform:translateY(0)}
+
+/* ── NPV CLOUD PANEL (modal) ── */
+.vc-name-badge{
+  font-family:var(--mono);font-size:1.05rem;font-weight:500;letter-spacing:.04em;
+  color:var(--blue);
+  background:rgba(59,130,246,.1);
+  border:1px solid rgba(59,130,246,.22);
+  padding:6px 14px;
+  border-radius:6px;
+  display:inline-block;
+}
+.vc-cloud-box{
+  background:rgba(7,9,15,.75);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:12px 14px;
+  margin-bottom:12px;
+  position:relative;
+  overflow:hidden;
+}
+.vc-cloud-top{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:8px;
+}
+.vc-cloud-label{
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;
+  color:var(--muted);text-transform:uppercase;
+  display:flex;align-items:center;gap:6px;
+}
+.vc-cloud-label i{color:var(--blue);font-size:.62rem}
+.vc-cloud-status{
+  font-family:var(--mono);font-size:.56rem;letter-spacing:.08em;
+  color:var(--green);
+}
+.vc-cloud-bar{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(13,17,23,.9);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+  position:relative;overflow:hidden;
+}
+.vc-cloud-bar::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--blue),var(--green),transparent);
+}
+.vc-cloud-bar-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--muted2);flex-shrink:0;
+}
+.vc-cloud-bar-text{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;
+  color:var(--muted);
+}
+.vc-copybtn{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;padding:14px;
+  background:rgba(59,130,246,.08);
+  border:1px solid rgba(59,130,246,.25);
+  border-radius:8px;color:var(--blue);
+  font-family:var(--mono);font-size:.75rem;font-weight:500;
+  letter-spacing:.12em;text-transform:uppercase;
+  cursor:pointer;transition:all .25s;
+  position:relative;overflow:hidden;
+}
+.vc-copybtn::before{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(59,130,246,.08),transparent);
+  transition:left .45s;
+}
+.vc-copybtn:hover{background:var(--blue);color:#fff;box-shadow:0 4px 20px rgba(59,130,246,.3)}
+.vc-copybtn:hover::before{left:100%}
+.vc-copybtn.copied{background:var(--green);color:var(--bg);border-color:var(--green)}
+.vc-copybtn i{font-size:.8rem}
+.npv-cloud-body{text-align:left}
 </style>
 </head>
 <body>
@@ -456,6 +531,36 @@ body{font-family:var(--body);background:var(--bg);color:var(--white);overflow-x:
   </div>
 </div>
 
+<!-- NPV CLOUD MODAL (opens when NPV Tunnel download is tapped) -->
+<div class="modal-overlay" id="npvCloudModal">
+  <div class="modal-box">
+    <div class="npv-cloud-body">
+      <div class="vc-head" style="margin-bottom:10px;">
+        <div class="vc-left">
+          <span class="vc-name-badge">NPV CLOUD</span>
+        </div>
+      </div>
+      <div class="vc-meta" style="margin-bottom:16px;margin-left:0;">
+        <span class="vc-proto">V2Ray Core</span>
+      </div>
+      <div class="vc-cloud-box">
+        <div class="vc-cloud-top">
+          <span class="vc-cloud-label"><i class="fas fa-cloud"></i>CLOUD CONFIG</span>
+          <span class="vc-cloud-status">ACTIVE ●</span>
+        </div>
+        <div class="vc-cloud-bar">
+          <div class="vc-cloud-bar-dot"></div>
+          <div class="vc-cloud-bar-text">Config secured · ready to copy</div>
+        </div>
+      </div>
+      <button class="vc-copybtn" id="npvCopyBtn" onclick="copyNpvCloud()">
+        <i class="fas fa-copy"></i><span id="npvCopyLabel">COPY CLOUD ID</span>
+      </button>
+    </div>
+    <button class="modal-close" id="npvCloudCloseBtn" style="margin-top:12px;">CLOSE</button>
+  </div>
+</div>
+
 <script>
 /* ════════════════════════════
    SUPABASE CONFIG
@@ -608,13 +713,44 @@ function startPage(){
   modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
   window.showUnavailModal=()=>modal.classList.add('open');
 
+  /* NPV CLOUD MODAL */
+  const npvModal=document.getElementById('npvCloudModal');
+  document.getElementById('npvCloudCloseBtn').addEventListener('click',()=>npvModal.classList.remove('open'));
+  npvModal.addEventListener('click',e=>{if(e.target===npvModal)npvModal.classList.remove('open')});
+  window.showNpvCloudModal=()=>npvModal.classList.add('open');
+
+  /* NPV CLOUD ID — set your real value here. Never rendered in the DOM, only copied. */
+  const NPV_CLOUD_ID = "53499739-5b0c-4816-9a6c-3fd62123e234";
+  window.copyNpvCloud=async function(){
+    const btn = document.getElementById('npvCopyBtn');
+    const label = document.getElementById('npvCopyLabel');
+    try{
+      await navigator.clipboard.writeText(NPV_CLOUD_ID);
+    }catch(e){
+      const ta=document.createElement('textarea');
+      ta.value=NPV_CLOUD_ID;
+      ta.style.position='fixed';
+      ta.style.opacity='0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    btn.classList.add('copied');
+    label.textContent='COPIED ✓';
+    setTimeout(()=>{
+      btn.classList.remove('copied');
+      label.textContent='COPY CLOUD ID';
+    },1800);
+  };
+
   /* VPN CARDS */
   const CATBOX_LINK='https://files.catbox.moe/3rtxth.zip';
   const vpns=[
     {name:'HA Tunnel',       proto:'SSL',  bars:5,blueBar:5,available:false},
     {name:'Stark VPN',       proto:'SSL',   bars:4,blueBar:4,available:false},
     {name:'Link Layer',      proto:'V2Ray Core',    bars:5,blueBar:5,available:false},
-    {name:'NPV Tunnel',      proto:'V2Ray Core',       bars:4,blueBar:3,available:false},
+    {name:'NPV Tunnel',      proto:'V2Ray Core',       bars:4,blueBar:3,available:false,cloudPanel:true},
     {name:'HTTP Injector',   proto:'Slow Dns',   bars:3,blueBar:2,available:false},
     {name:'HTTP Custom',     proto:'Slow Dns', bars:4,blueBar:4,available:true},
     {name:'Tik Tunnel',      proto:'V2Ray Core',     bars:5,blueBar:5,available:false},
@@ -628,9 +764,14 @@ function startPage(){
     const d=document.createElement('div');
     d.className='vpn-card fade';
     d.style.transitionDelay=(i*.05)+'s';
-    const btnHTML=v.available
-      ?`<a href="${CATBOX_LINK}" download class="vc-dl"><i class="fas fa-download"></i> DOWNLOAD CONFIG</a>`
-      :`<div class="vc-dl" onclick="showUnavailModal()"><i class="fas fa-download"></i> DOWNLOAD CONFIG</div>`;
+    let btnHTML;
+    if(v.cloudPanel){
+      btnHTML=`<div class="vc-dl" onclick="showNpvCloudModal()"><i class="fas fa-download"></i> DOWNLOAD CONFIG</div>`;
+    }else{
+      btnHTML=v.available
+        ?`<a href="${CATBOX_LINK}" download class="vc-dl"><i class="fas fa-download"></i> DOWNLOAD CONFIG</a>`
+        :`<div class="vc-dl" onclick="showUnavailModal()"><i class="fas fa-download"></i> DOWNLOAD CONFIG</div>`;
+    }
     d.innerHTML=`
       <div class="vc-head">
         <div class="vc-left"><div class="vc-live-dot"></div><div class="vc-name">${v.name}</div></div>
